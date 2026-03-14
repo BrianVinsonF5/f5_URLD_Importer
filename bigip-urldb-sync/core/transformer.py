@@ -7,15 +7,11 @@ numbered sub-category payloads (e.g. ``custom_block_list_01``, ``_02``, …).
 
 import logging
 import math
-from typing import List, Dict, Any, Tuple
+from typing import Dict, List, Tuple
+
+from core.types import IControlPayload, UrlEntry
 
 logger = logging.getLogger(__name__)
-
-# A normalized URL entry as produced by core.loader
-UrlEntry = Dict[str, str]
-
-# An iControl REST payload ready to POST/PATCH
-IControlPayload = Dict[str, Any]
 
 
 def _build_urls_field(entries: List[UrlEntry]) -> List[Dict[str, str]]:

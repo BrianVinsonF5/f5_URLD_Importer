@@ -42,7 +42,7 @@ from config import get_settings
 from core.bigip import APIError, AuthenticationError, BIGIPClient
 from core.loader import load
 from core.transformer import transform
-from status import SyncStatus, read_status, write_status
+from status import SyncStatus, read_status, write_status_safe
 
 logger = logging.getLogger(__name__)
 
@@ -189,13 +189,13 @@ app = FastAPI(
 
 
 @app.get("/health", response_model=HealthResponse, tags=["operations"])
-async def health() -> HealthResponse:
+def health() -> HealthResponse:
     """Liveness check — returns HTTP 200 when the service is running."""
     return HealthResponse()
 
 
 @app.get("/status", response_model=StatusResponse, tags=["operations"])
-async def get_status() -> StatusResponse:
+def get_status() -> StatusResponse:
     """
     Return the last sync status from the status JSON file.
 
@@ -226,7 +226,7 @@ async def get_status() -> StatusResponse:
     status_code=status.HTTP_200_OK,
     tags=["sync"],
 )
-async def push_urldb(request: PushRequest) -> PushResponse:
+def push_urldb(request: PushRequest) -> PushResponse:
     """
     Trigger an immediate URLDB sync.
 
@@ -243,13 +243,7 @@ async def push_urldb(request: PushRequest) -> PushResponse:
             default_type=request.url_type,
             verify_ssl=request.verify_ssl,
         )
-    except FileNotFoundError as exc:
-        _record_error(str(exc), request, status_path)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-    except (ValueError, requests.RequestException) as exc:
+    except (FileNotFoundError, ValueError, requests.RequestException) as exc:
         _record_error(str(exc), request, status_path)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -318,7 +312,7 @@ async def push_urldb(request: PushRequest) -> PushResponse:
         source=request.source,
         bigip_host=request.host,
     )
-    _write_status_safe(sync_status, status_path)
+    write_status_safe(sync_status, status_path)
 
     return PushResponse(
         status="success",
@@ -337,7 +331,7 @@ async def push_urldb(request: PushRequest) -> PushResponse:
     response_model=ScheduleUpdateResponse,
     tags=["scheduler"],
 )
-async def schedule_update(request: ScheduleUpdateRequest) -> ScheduleUpdateResponse:
+def schedule_update(request: ScheduleUpdateRequest) -> ScheduleUpdateResponse:
     """
     Update the sync polling interval.
 
@@ -384,12 +378,4 @@ def _record_error(message: str, request: PushRequest, status_path: Path) -> None
         source=request.source,
         bigip_host=request.host,
     )
-    _write_status_safe(err_status, status_path)
-
-
-def _write_status_safe(sync_status: SyncStatus, path: Path) -> None:
-    """Write status, logging a warning instead of raising on permission errors."""
-    try:
-        write_status(sync_status, path)
-    except OSError as exc:
-        logger.warning("Could not write status file '%s': %s", path, exc)
+    write_status_safe(err_status, status_path)

@@ -15,14 +15,14 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 import urllib3
 
+from core.types import IControlPayload
+
 logger = logging.getLogger(__name__)
 
 # iControl REST token TTL as documented by F5 (seconds)
 _TOKEN_TTL_SECONDS = 1200
 # Refresh slightly before expiry to avoid race conditions
 _TOKEN_REFRESH_BUFFER = 60
-
-IControlPayload = Dict[str, Any]
 
 
 class AuthenticationError(Exception):
@@ -93,11 +93,8 @@ class BIGIPClient:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _base_url(self) -> str:
-        return f"https://{self.host}"
-
     def _url(self, path: str) -> str:
-        return f"{self._base_url()}{path}"
+        return f"https://{self.host}{path}"
 
     def _token_is_valid(self) -> bool:
         """Return True if the cached token is still usable (not near expiry)."""
@@ -290,11 +287,7 @@ class BIGIPClient:
             APIError:              On unexpected HTTP error responses.
             requests.ConnectionError: On network-level failures.
         """
-        results = []
-        for name, payload in pairs:
-            result = self.upsert_category(name, payload)
-            results.append(result)
-        return results
+        return [self.upsert_category(name, payload) for name, payload in pairs]
 
     def category_exists(self, name: str) -> bool:
         """

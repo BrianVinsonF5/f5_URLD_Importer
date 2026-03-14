@@ -11,15 +11,14 @@ Both are normalized to a list of dicts: [{"url": "...", "type": "..."}, ...]
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Union
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 import requests
 
-logger = logging.getLogger(__name__)
+from core.types import UrlEntry
 
-# Normalized URL entry type
-UrlEntry = Dict[str, str]
+logger = logging.getLogger(__name__)
 
 
 def _is_http_source(source: str) -> bool:
@@ -64,7 +63,7 @@ def _normalize_entries(raw_urls: List[Any], default_type: str = "exact") -> List
     return normalized
 
 
-def load_from_file(path: Union[str, Path], default_type: str = "exact") -> List[UrlEntry]:
+def load_from_file(path: str | Path, default_type: str = "exact") -> List[UrlEntry]:
     """
     Load and normalize a URL list from a local JSON file.
 
@@ -81,11 +80,11 @@ def load_from_file(path: Union[str, Path], default_type: str = "exact") -> List[
     """
     path = Path(path)
     logger.info("Loading URL list from local file: %s", path)
-    if not path.exists():
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            data: Any = json.load(fh)
+    except FileNotFoundError:
         raise FileNotFoundError(f"Source file not found: {path}")
-
-    with path.open("r", encoding="utf-8") as fh:
-        data: Any = json.load(fh)
 
     return _parse_json_payload(data, default_type=default_type)
 

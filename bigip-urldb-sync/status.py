@@ -147,7 +147,6 @@ def write_status(sync_status: SyncStatus, path: Path = DEFAULT_STATUS_PATH) -> N
     Raises:
         OSError: If the file cannot be written (e.g. permission denied).
     """
-    path = Path(path)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as fh:
@@ -173,18 +172,34 @@ def read_status(path: Path = DEFAULT_STATUS_PATH) -> Optional[dict]:
         ValueError: If the file exists but contains invalid JSON.
         OSError:    If the file exists but cannot be read.
     """
-    path = Path(path)
-    if not path.exists():
-        logger.debug("Status file '%s' does not exist yet.", path)
-        return None
-
     try:
         with path.open("r", encoding="utf-8") as fh:
             data = json.load(fh)
         logger.debug("Status read from %s", path)
         return data
+    except FileNotFoundError:
+        logger.debug("Status file '%s' does not exist yet.", path)
+        return None
     except json.JSONDecodeError as exc:
         raise ValueError(f"Status file '{path}' contains invalid JSON: {exc}") from exc
     except OSError as exc:
         logger.error("Cannot read status file '%s': %s", path, exc)
         raise
+
+
+def write_status_safe(sync_status: SyncStatus, path: Path = DEFAULT_STATUS_PATH) -> None:
+    """
+    Write *sync_status* to *path*, logging a warning on :exc:`OSError` instead of raising.
+
+    Use this in contexts where a status-write failure should not abort the
+    calling operation (e.g. the sync already succeeded; don't fail just because
+    the log directory has a permissions issue).
+
+    Args:
+        sync_status: The status record to persist.
+        path:        Destination file path (default: ``/var/log/urldb-sync/status.json``).
+    """
+    try:
+        write_status(sync_status, path)
+    except OSError as exc:
+        logger.warning("Could not write status file '%s': %s", path, exc)

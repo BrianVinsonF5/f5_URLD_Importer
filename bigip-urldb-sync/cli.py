@@ -22,16 +22,16 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import NoReturn, Optional
 
 import click
 import requests
 
-from config import get_settings
+from config import Settings
 from core.bigip import APIError, AuthenticationError, BIGIPClient
 from core.loader import load
 from core.transformer import transform
-from status import SyncStatus, read_status, write_status
+from status import SyncStatus, read_status, write_status_safe
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +230,7 @@ def sync_command(
         source=source,
         bigip_host=host,
     )
-    _write_status_safe(sync_status, status_path)
+    write_status_safe(sync_status, status_path)
 
     click.echo(
         click.style(
@@ -303,23 +303,8 @@ def status_command(status_file: str, output_json: bool) -> None:
 
 
 def _configure_logging(level: str) -> None:
-    """Configure root logging at the given level."""
-    numeric_level = getattr(logging, level.upper(), logging.INFO)
-    logging.basicConfig(
-        level=numeric_level,
-        format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S",
-    )
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
-    logging.getLogger("requests").setLevel(logging.WARNING)
-
-
-def _write_status_safe(sync_status: SyncStatus, path: Path) -> None:
-    """Write status, logging a warning instead of raising on permission errors."""
-    try:
-        write_status(sync_status, path)
-    except OSError as exc:
-        logger.warning("Could not write status file: %s", exc)
+    """Configure root logging at the given level, delegating to :class:`Settings`."""
+    Settings(log_level=level).configure_logging()
 
 
 def _fail(
@@ -328,7 +313,7 @@ def _fail(
     host: str,
     status_path: Path,
     exit_code: int = 1,
-) -> None:
+) -> NoReturn:
     """Log an error, write an error status, and exit."""
     logger.error(message)
     click.echo(click.style(f"ERROR: {message}", fg="red"), err=True)
@@ -337,7 +322,7 @@ def _fail(
         source=source,
         bigip_host=host,
     )
-    _write_status_safe(err_status, status_path)
+    write_status_safe(err_status, status_path)
     sys.exit(exit_code)
 
 

@@ -25,6 +25,8 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from pydantic import Field, field_validator
+# Allowed Python log level names (used as a Literal type for log_level)
+_LOG_LEVELS = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -103,7 +105,7 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     # Logging
     # ------------------------------------------------------------------
-    log_level: str = Field(
+    log_level: _LOG_LEVELS = Field(
         default="INFO",
         description="Python logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).",
     )
@@ -114,23 +116,9 @@ class Settings(BaseSettings):
 
     @field_validator("log_level", mode="before")
     @classmethod
-    def validate_log_level(cls, value: str) -> str:
-        """Ensure log_level maps to a valid Python logging level name."""
-        upper = value.upper()
-        if upper not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
-            raise ValueError(
-                f"Invalid LOG_LEVEL '{value}'. "
-                "Must be one of: DEBUG, INFO, WARNING, ERROR, CRITICAL."
-            )
-        return upper
-
-    @field_validator("urldb_chunk_size", mode="before")
-    @classmethod
-    def validate_chunk_size(cls, value: int) -> int:
-        """Ensure chunk size is a positive integer."""
-        if int(value) < 1:
-            raise ValueError(f"URLDB_CHUNK_SIZE must be >= 1, got {value}.")
-        return int(value)
+    def uppercase_log_level(cls, value: str) -> str:
+        """Uppercase the log level so env vars like ``info`` are accepted."""
+        return value.upper()
 
     def configure_logging(self) -> None:
         """
