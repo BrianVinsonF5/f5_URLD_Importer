@@ -1,0 +1,38 @@
+[Unit]
+Description=BIG-IP URLDB Sync — push custom URL list to F5 BIG-IP
+Documentation=https://github.com/your-org/bigip-urldb-sync
+# Ensure the network is up before running
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# ---------------------------------------------------------------------------
+# Run as a dedicated low-privilege user.
+# Create with: useradd -r -s /sbin/nologin urldb-sync
+# ---------------------------------------------------------------------------
+User=urldb-sync
+Group=urldb-sync
+
+# Working directory — place your .env file here
+WorkingDirectory=/opt/urldb-sync
+
+# Load credentials from the environment file
+EnvironmentFile=-/opt/urldb-sync/.env
+
+# Path to the Python interpreter inside the virtual environment
+ExecStart=/opt/urldb-sync/venv/bin/python /opt/urldb-sync/cli.py sync
+
+# Ensure the status log directory exists and is writable by the service user
+# (create once at install time with: install -d -o urldb-sync -g urldb-sync -m 750 /var/log/urldb-sync)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=urldb-sync
+
+# Limit the blast radius if something goes wrong
+PrivateTmp=true
+ProtectSystem=full
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

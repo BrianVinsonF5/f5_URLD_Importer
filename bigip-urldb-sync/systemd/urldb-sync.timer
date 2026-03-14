@@ -1,0 +1,40 @@
+[Unit]
+Description=BIG-IP URLDB Sync timer — runs urldb-sync.service on a schedule
+Documentation=https://github.com/your-org/bigip-urldb-sync
+
+[Timer]
+# ---------------------------------------------------------------------------
+# Run the sync service at a fixed calendar interval.
+#
+# The interval is read from /etc/urldb-sync/sync_interval.conf when the
+# helper wrapper script is used (see README).  The default below is 60 min.
+#
+# To change the interval without editing this file, use the API:
+#   curl -X POST http://localhost:8080/schedule/update \
+#        -H 'Content-Type: application/json' \
+#        -d '{"interval_minutes": 30}'
+#
+# Or write the interval in minutes directly:
+#   echo "30" | sudo tee /etc/urldb-sync/sync_interval.conf
+# Then reload the timer:
+#   sudo systemctl daemon-reload && sudo systemctl restart urldb-sync.timer
+# ---------------------------------------------------------------------------
+
+# Run once on timer unit activation (e.g. after boot) if a run was missed
+OnBootSec=2min
+
+# Repeat every 60 minutes by default.
+# Override by writing an integer (minutes) to /etc/urldb-sync/sync_interval.conf
+# and using the wrapper ExecStart below.
+OnUnitActiveSec=60min
+
+# Keep the timer accurate to within 30 seconds (reduces simultaneous wake-ups)
+AccuracySec=30s
+
+# Persist missed runs across reboots
+Persistent=true
+
+Unit=urldb-sync.service
+
+[Install]
+WantedBy=timers.target
