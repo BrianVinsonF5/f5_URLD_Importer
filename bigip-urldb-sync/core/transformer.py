@@ -7,20 +7,40 @@ numbered sub-category payloads (e.g. ``custom_block_list_01``, ``_02``, …).
 
 import logging
 import math
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from core.types import IControlPayload, UrlEntry
 
 logger = logging.getLogger(__name__)
 
+# Maps user-facing URL type names to the iControl REST API values.
+#
+# BIG-IP quirks:
+#   "exact"     → omit the "type" key entirely; exact is the default and the
+#                 API returns HTTP 400 if you send "type":"exact" explicitly.
+#   "glob"      → the REST API uses the hyphenated form "glob-match".
+#   "glob-match"→ already in API form; pass through unchanged.
+#   "any"       → not a standard BIG-IP URL-DB type; omit and let BIG-IP use
+#                 its default, or the caller can supply "glob-match".
+#
+# A mapped value of None means: do not include "type" in the URL entry object.
+_BIGIP_URL_TYPE_MAP: Dict[str, Optional[str]] = {
+    "exact": None,
+    "glob": "glob-match",
+    "glob-match": "glob-match",
+    "any": None,
+}
 
-def _build_urls_field(entries: List[UrlEntry]) -> List[Dict[str, str]]:
+
+def _build_urls_field(entries: List[UrlEntry]) -> List[Dict[str, Any]]:
     """
     Convert normalized URL entries to the ``urls`` array format expected by iControl REST.
 
-    Each entry in the output has the form::
-
-        {"name": "https://example.com", "type": "exact"}
+    The iControl ``url-db/url-category`` endpoint accepts objects with a
+    ``name`` key and an optional ``type`` key.  Sending ``"type":"exact"``
+    causes a 400 error on BIG-IP, so exact-match entries are emitted without
+    a ``type`` field (exact is the server-side default).  Glob entries use the
+    hyphenated ``"glob-match"`` spelling required by the REST API.
 
     Args:
         entries: Normalized URL entry dicts from the loader.
@@ -28,7 +48,15 @@ def _build_urls_field(entries: List[UrlEntry]) -> List[Dict[str, str]]:
     Returns:
         List of iControl-formatted URL dicts.
     """
-    return [{"name": e["url"], "type": e["type"]} for e in entries]
+    result: List[Dict[str, Any]] = []
+    for e in entries:
+        raw_type = e.get("type", "exact")
+        api_type = _BIGIP_URL_TYPE_MAP.get(raw_type, raw_type)
+        entry: Dict[str, Any] = {"name": e["url"]}
+        if api_type:
+            entry["type"] = api_type
+        result.append(entry)
+    return result
 
 
 def build_payload(
