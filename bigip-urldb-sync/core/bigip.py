@@ -268,10 +268,10 @@ class BIGIPClient:
 
         if exists:
             logger.info("Category '%s' exists — replacing via PUT.", name)
-            # For PUT (full replacement), remove displayName as it cannot be changed after creation
-            put_payload = {k: v for k, v in payload.items() if k != "displayName"}
+            # PUT requires displayName to be present (even though it cannot be changed).
+            # The payload from transformer already includes displayName, so use it as-is.
             try:
-                resp = self._put_category(name, put_payload)
+                resp = self._put_category(name, payload)
             except requests.exceptions.ConnectionError as exc:
                 raise requests.exceptions.ConnectionError(
                     f"Network error reaching BIG-IP '{self.host}': {exc}"
@@ -281,7 +281,7 @@ class BIGIPClient:
                 logger.warning("Received 401 — token may have expired; re-authenticating once.")
                 self._token = None
                 try:
-                    resp = self._put_category(name, put_payload)
+                    resp = self._put_category(name, payload)
                 except requests.exceptions.ConnectionError as exc:
                     raise requests.exceptions.ConnectionError(
                         f"Network error reaching BIG-IP '{self.host}' on retry: {exc}"
