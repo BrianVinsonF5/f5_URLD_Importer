@@ -2,6 +2,9 @@
   "urls": [
     "https://site1.example.com/",
     "http://site2.example.net/",
-    "https://site3.example.org/"
+    "https://site3.example.org/",
+    "https://site4.example.org/",
+    "https://site5.example.org/",
+    "https://site6.example.org/"
   ]
 }
