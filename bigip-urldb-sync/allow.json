@@ -1,0 +1,7 @@
+{
+  "urls": [
+    "https://site1.example.com/",
+    "http://site2.example.net/",
+    "https://site3.example.org/"
+  ]
+}
