@@ -64,6 +64,7 @@ def build_payload(
     entries: List[UrlEntry],
     partition: str = "Common",
     description: str = "Managed by bigip-urldb-sync",
+    display_name: str = "",
 ) -> IControlPayload:
     """
     Build a single iControl REST payload for the given category name and URL entries.
@@ -73,13 +74,18 @@ def build_payload(
         entries:       Normalized URL entries to include in this payload.
         partition:     BIG-IP partition (default: ``Common``).
         description:   Human-readable description stored on the category object.
+        display_name:  Human-readable display name for the category. If not provided,
+                       defaults to the category_name with underscores replaced by spaces.
 
     Returns:
         A dict suitable for serialisation to JSON and submission via POST or PATCH.
     """
+    # BIG-IP requires displayName when creating a URL category
+    effective_display_name = display_name if display_name else category_name.replace("_", " ").title()
     return {
         "name": category_name,
         "partition": partition,
+        "displayName": effective_display_name,
         "description": description,
         "urls": _build_urls_field(entries),
     }
