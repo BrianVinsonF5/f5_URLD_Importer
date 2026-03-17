@@ -1,0 +1,7 @@
+{
+  "urls": [
+    "https://malware.example.com",
+    "http://phishing.example.net",
+    "https://c2.example.org"
+  ]
+}
