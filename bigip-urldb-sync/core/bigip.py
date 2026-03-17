@@ -218,8 +218,9 @@ class BIGIPClient:
         """
         Upsert a URLDB category: PATCH if it exists, POST if it does not.
 
-        The method attempts a PATCH first.  If BIG-IP returns 404, it falls
-        back to POST to create the category.
+        The method first checks if the category exists.  If it does, it uses
+        PATCH to update the category (without displayName to avoid conflicts).
+        If it doesn't exist, it uses POST to create the category with all fields.
 
         Args:
             name:    Category name (without partition prefix).
@@ -235,33 +236,52 @@ class BIGIPClient:
         """
         logger.info("Upserting URLDB category '%s' (partition: %s).", name, self.partition)
 
+        # Check if category already exists
         try:
-            resp = self._patch_category(name, payload)
+            exists = self.category_exists(name)
         except requests.exceptions.ConnectionError as exc:
             raise requests.exceptions.ConnectionError(
-                f"Network error reaching BIG-IP '{self.host}': {exc}"
+                f"Network error checking category '{name}' on '{self.host}': {exc}"
             ) from exc
 
-        if resp.status_code == 401:
-            logger.warning("Received 401 — token may have expired; re-authenticating once.")
-            self._token = None
+        if exists:
+            logger.info("Category '%s' exists — updating via PATCH.", name)
+            # For PATCH, remove displayName as it cannot be changed after creation
+            patch_payload = {k: v for k, v in payload.items() if k != "displayName"}
             try:
-                resp = self._patch_category(name, payload)
+                resp = self._patch_category(name, patch_payload)
             except requests.exceptions.ConnectionError as exc:
                 raise requests.exceptions.ConnectionError(
-                    f"Network error reaching BIG-IP '{self.host}' on retry: {exc}"
+                    f"Network error reaching BIG-IP '{self.host}': {exc}"
                 ) from exc
 
-        if resp.status_code == 404:
-            logger.info(
-                "Category '%s' not found (404) — creating via POST.", name
-            )
+            if resp.status_code == 401:
+                logger.warning("Received 401 — token may have expired; re-authenticating once.")
+                self._token = None
+                try:
+                    resp = self._patch_category(name, patch_payload)
+                except requests.exceptions.ConnectionError as exc:
+                    raise requests.exceptions.ConnectionError(
+                        f"Network error reaching BIG-IP '{self.host}' on retry: {exc}"
+                    ) from exc
+        else:
+            logger.info("Category '%s' not found — creating via POST.", name)
             try:
                 resp = self._post_category(payload)
             except requests.exceptions.ConnectionError as exc:
                 raise requests.exceptions.ConnectionError(
                     f"Network error reaching BIG-IP '{self.host}' during POST: {exc}"
                 ) from exc
+
+            if resp.status_code == 401:
+                logger.warning("Received 401 — token may have expired; re-authenticating once.")
+                self._token = None
+                try:
+                    resp = self._post_category(payload)
+                except requests.exceptions.ConnectionError as exc:
+                    raise requests.exceptions.ConnectionError(
+                        f"Network error reaching BIG-IP '{self.host}' on retry: {exc}"
+                    ) from exc
 
         self._raise_for_api_error(resp, context=f"upsert category '{name}'")
         logger.info(
