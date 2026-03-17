@@ -4,7 +4,7 @@ bigip.py — iControl REST client for F5 BIG-IP URLDB category management.
 Responsibilities:
   - Token-based authentication (POST /mgmt/shared/authn/login)
   - Automatic token caching and refresh (TTL: 1200 seconds)
-  - Upsert logic: PATCH → fallback POST on 404
+  - Upsert logic: PUT (full replacement) if exists, POST if new
   - Graceful error handling for auth, network, and API failures
 """
 
@@ -214,12 +214,34 @@ class BIGIPClient:
             timeout=self.timeout,
         )
 
+    def _put_category(self, name: str, payload: IControlPayload) -> requests.Response:
+        """
+        PUT (full replacement) an existing URLDB category.
+
+        Unlike PATCH which merges fields, PUT replaces the entire resource,
+        ensuring that URLs removed from the source are also removed from
+        the BIG-IP category.
+
+        Returns:
+            The raw :class:`requests.Response`.
+        """
+        url = self._category_url(name)
+        logger.debug("PUT %s", url)
+        return self._session.put(
+            url,
+            json=payload,
+            headers=self._headers(),
+            verify=self.verify_ssl,
+            timeout=self.timeout,
+        )
+
     def upsert_category(self, name: str, payload: IControlPayload) -> Dict[str, Any]:
         """
-        Upsert a URLDB category: PATCH if it exists, POST if it does not.
+        Upsert a URLDB category: PUT (full replacement) if it exists, POST if it does not.
 
         The method first checks if the category exists.  If it does, it uses
-        PATCH to update the category (without displayName to avoid conflicts).
+        PUT to fully replace the category (including all URLs), ensuring that
+        URLs removed from the source file are also removed from the BIG-IP.
         If it doesn't exist, it uses POST to create the category with all fields.
 
         Args:
@@ -245,11 +267,11 @@ class BIGIPClient:
             ) from exc
 
         if exists:
-            logger.info("Category '%s' exists — updating via PATCH.", name)
-            # For PATCH, remove displayName as it cannot be changed after creation
-            patch_payload = {k: v for k, v in payload.items() if k != "displayName"}
+            logger.info("Category '%s' exists — replacing via PUT.", name)
+            # For PUT (full replacement), remove displayName as it cannot be changed after creation
+            put_payload = {k: v for k, v in payload.items() if k != "displayName"}
             try:
-                resp = self._patch_category(name, patch_payload)
+                resp = self._put_category(name, put_payload)
             except requests.exceptions.ConnectionError as exc:
                 raise requests.exceptions.ConnectionError(
                     f"Network error reaching BIG-IP '{self.host}': {exc}"
@@ -259,7 +281,7 @@ class BIGIPClient:
                 logger.warning("Received 401 — token may have expired; re-authenticating once.")
                 self._token = None
                 try:
-                    resp = self._patch_category(name, patch_payload)
+                    resp = self._put_category(name, put_payload)
                 except requests.exceptions.ConnectionError as exc:
                     raise requests.exceptions.ConnectionError(
                         f"Network error reaching BIG-IP '{self.host}' on retry: {exc}"
